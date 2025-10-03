@@ -146,7 +146,9 @@ def fetch_nfl_props():
                                 "player": player,
                                 "side": side,
                                 "line": line,
-                                "odds": odds
+                                "odds": odds,
+                                "bookmaker": bookmaker.get("key"),
+                                "bookmaker_title": bookmaker.get("title")
                             })
         
         logger.info(f"Pulled {len(props)} props in odds range")
@@ -239,10 +241,12 @@ def fetch_nfl_props():
                     "market": p["market"].replace('_', ' ').title(),
                     "player": p["player"],
                     "side": p["side"],
-                    "line": p["line"],
-                    "odds": p["odds"],
-                    "season_avg": round(avg_val, 1),
-                    "weekly_values": vals
+                    "line": float(p["line"]),
+                    "odds": int(p["odds"]),
+                    "bookmaker": p["bookmaker"],
+                    "bookmaker_title": p["bookmaker_title"],
+                    "season_avg": round(float(avg_val), 1),
+                    "weekly_values": [float(v) for v in vals]
                 })
         
         # 8. Deduplicate
@@ -250,6 +254,12 @@ def fetch_nfl_props():
         if not df.empty:
             df = df.drop_duplicates(subset=["player","market","line","side"])
             qualifying = df.to_dict('records')
+            # Convert numpy types to Python types
+            for prop in qualifying:
+                prop['line'] = float(prop['line'])
+                prop['odds'] = int(prop['odds'])
+                prop['season_avg'] = float(prop['season_avg'])
+                prop['weekly_values'] = [float(v) for v in prop['weekly_values']]
             # Convert any remaining numpy types to Python types
             for prop in qualifying:
                 prop['line'] = float(prop['line']) if prop['line'] is not None else None
