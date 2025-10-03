@@ -3,6 +3,7 @@ import pandas as pd
 import nfl_data_py as nfl
 from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify
+from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 import os
@@ -14,7 +15,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
+CORS(app, origins=[
+    "https://dashboard.thebettinginsider.com",
+    "http://localhost:3000",
+    "http://localhost:3001"
+])
 # API Key - use environment variable in production
 API_KEY = os.getenv("ODDS_API_KEY", "d8ba5d45eca27e710d7ef2680d8cb452")
 
