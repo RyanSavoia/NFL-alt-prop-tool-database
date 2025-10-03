@@ -226,8 +226,8 @@ def fetch_nfl_props():
             
             return True, vals
         
-        # 7. Filter qualifying props and group by player/line
-        qualifying_grouped = {}
+        # 7. Group qualifying props by unique prop, collecting all bookmakers
+        prop_groups = {}
         for p in props:
             stat_col = market_to_stat.get(p["market"])
             if not stat_col:
@@ -235,43 +235,46 @@ def fetch_nfl_props():
             ok, vals = qualifies_strong(p["player"], stat_col, p["line"], p["side"], p["market"])
             if ok:
                 # Create unique key for this prop
-                prop_key = f"{p['player']}_{p['market']}_{p['side']}_{p['line']}_{p['game']}"
+                prop_key = (p["player"], p["market"], p["line"], p["side"], p["game"])
                 
-                if prop_key not in qualifying_grouped:
+                if prop_key not in prop_groups:
                     avg_val = sum(vals) / len(vals) if vals else 0
-                    qualifying_grouped[prop_key] = {
+                    prop_groups[prop_key] = {
                         "game": p["game"],
                         "game_time": p["game_time"],
                         "market": p["market"].replace('_', ' ').title(),
                         "player": p["player"],
                         "side": p["side"],
                         "line": float(p["line"]),
+                        "bookmakers": [],
                         "season_avg": round(float(avg_val), 1),
-                        "weekly_values": [float(v) for v in vals],
-                        "bookmakers": []
+                        "weekly_values": [float(v) for v in vals]
                     }
                 
-                # Add this bookmaker's odds
-                qualifying_grouped[prop_key]["bookmakers"].append({
-                    "bookmaker": p["bookmaker"],
-                    "bookmaker_title": p["bookmaker_title"],
+                # Add bookmaker to this prop
+                prop_groups[prop_key]["bookmakers"].append({
+                    "name": p["bookmaker"],
+                    "title": p["bookmaker_title"],
                     "odds": int(p["odds"])
                 })
         
-        # Convert to list and sort bookmakers by best odds
+        # 8. Convert to list and remove duplicate bookmakers for each prop
         qualifying = []
-        for prop in qualifying_grouped.values():
+        for prop_data in prop_groups.values():
+            # Remove duplicate bookmakers (same bookmaker with same odds)
+            seen_bookmakers = set()
+            unique_bookmakers = []
+            for bm in prop_data["bookmakers"]:
+                bm_key = (bm["name"], bm["odds"])
+                if bm_key not in seen_bookmakers:
+                    seen_bookmakers.add(bm_key)
+                    unique_bookmakers.append(bm)
+            prop_data["bookmakers"] = unique_bookmakers
+            
             # Sort bookmakers by best odds (least negative)
-            prop["bookmakers"].sort(key=lambda x: x["odds"], reverse=True)
-            qualifying.append(prop)
-        
-        # 8. No need for deduplication anymore since we grouped
-            # Convert any remaining numpy types to Python types
-            for prop in qualifying:
-                prop['line'] = float(prop['line']) if prop['line'] is not None else None
-                prop['odds'] = int(prop['odds']) if prop['odds'] is not None else None
-                prop['season_avg'] = float(prop['season_avg']) if prop['season_avg'] is not None else None
-                prop['weekly_values'] = [float(v) for v in prop['weekly_values']] if prop['weekly_values'] else []
+            prop_data["bookmakers"].sort(key=lambda x: x["odds"], reverse=True)
+            
+            qualifying.append(prop_data)
         
         # Update global data
         with data_lock:
