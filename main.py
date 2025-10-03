@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import nfl_data_py as nfl
 from datetime import datetime, timezone, timedelta
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 import os
@@ -276,238 +276,9 @@ def fetch_nfl_props():
             latest_props_data["error"] = str(e)
             latest_props_data["last_updated"] = datetime.now(ET).isoformat()
 
-# HTML template
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFL Alt Props Tracker</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .header {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2d3748;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .status {
-            display: flex;
-            gap: 20px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #718096;
-            font-size: 14px;
-        }
-        .badge {
-            background: #805ad5;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-        .games-list {
-            background: rgba(255,255,255,0.95);
-            border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .game-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #e2e8f0;
-            color: #4a5568;
-        }
-        .game-item:last-child { border-bottom: none; }
-        .props-grid {
-            display: grid;
-            gap: 20px;
-        }
-        .game-section {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        }
-        .game-title {
-            color: #2d3748;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .prop-card {
-            background: #f7fafc;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 12px;
-            border-left: 4px solid #805ad5;
-        }
-        .prop-player {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 8px;
-        }
-        .prop-details {
-            display: grid;
-            gap: 6px;
-            font-size: 14px;
-            color: #4a5568;
-        }
-        .prop-line {
-            background: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-        .odds {
-            color: #38a169;
-            font-weight: 600;
-        }
-        .weekly-values {
-            font-size: 12px;
-            color: #718096;
-            margin-top: 6px;
-        }
-        .error {
-            background: #fed7d7;
-            color: #c53030;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: white;
-        }
-        .refresh-btn {
-            background: #805ad5;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .refresh-btn:hover {
-            background: #6b46c1;
-        }
-        @media (max-width: 768px) {
-            .header { padding: 20px; }
-            .status { gap: 10px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>
-                🏈 NFL Alt Props Tracker
-                <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
-            </h1>
-            <div class="status">
-                <div class="status-item">
-                    📅 {{ data.current_day }}
-                </div>
-                <div class="status-item">
-                    🏈 Week <span class="badge">{{ data.current_week }}</span>
-                </div>
-                <div class="status-item">
-                    ⏰ Updated: {{ data.last_updated_formatted }}
-                </div>
-                <div class="status-item">
-                    📊 Props: <span class="badge">{{ data.summary.total_props }}</span>
-                </div>
-            </div>
-            
-            {% if data.games %}
-            <div class="games-list">
-                <strong>Analyzing {{ data.summary.total_games }} games:</strong>
-                {% for game in data.games %}
-                <div class="game-item">{{ game.matchup }} - {{ game.time }}</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        
-        {% if data.error %}
-        <div class="error">
-            ⚠️ Error: {{ data.error }}
-        </div>
-        {% endif %}
-        
-        {% if data.props %}
-        <div class="props-grid">
-            {% for game, game_props in data.props_by_game.items() %}
-            <div class="game-section">
-                <div class="game-title">
-                    {{ game }} - {{ game_props[0].game_time }}
-                </div>
-                {% for prop in game_props %}
-                <div class="prop-card">
-                    <div class="prop-player">{{ prop.player }}</div>
-                    <div class="prop-details">
-                        <div>
-                            <span class="prop-line">{{ prop.market }}: {{ prop.side }} {{ prop.line }}</span>
-                        </div>
-                        <div>
-                            Odds: <span class="odds">{{ prop.odds }}</span> | 
-                            Season Avg: <strong>{{ prop.season_avg }}</strong>
-                        </div>
-                        <div class="weekly-values">
-                            Weekly: {{ prop.weekly_values }}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endfor %}
-        </div>
-        {% elif not data.error %}
-        <div class="empty-state">
-            <h2>No qualifying props found</h2>
-            <p>Check back later for updates!</p>
-        </div>
-        {% endif %}
-    </div>
-    
-    <script>
-        // Auto-refresh every 5 minutes
-        setTimeout(() => location.reload(), 300000);
-    </script>
-</body>
-</html>
-"""
-
 @app.route('/')
 def index():
-    """Main route to display props"""
+    """Main route returns JSON data"""
     with data_lock:
         data = latest_props_data.copy()
     
@@ -518,28 +289,31 @@ def index():
     else:
         data["last_updated_formatted"] = "Never"
     
-    # Group props by game
-    props_by_game = {}
-    for prop in data.get("props", []):
-        game = prop["game"]
-        if game not in props_by_game:
-            props_by_game[game] = []
-        props_by_game[game].append(prop)
+    # Group props by game for better organization
+    if data.get("props"):
+        props_by_game = {}
+        for prop in data["props"]:
+            game = prop["game"]
+            if game not in props_by_game:
+                props_by_game[game] = []
+            props_by_game[game].append(prop)
+        data["props_by_game"] = props_by_game
     
-    data["props_by_game"] = props_by_game
-    
-    return render_template_string(HTML_TEMPLATE, data=data)
+    return jsonify(data)
 
-@app.route('/api/props')
-def api_props():
-    """API endpoint to get props as JSON"""
-    with data_lock:
-        return jsonify(latest_props_data)
+@app.route('/props')
+def get_props():
+    """Alias endpoint for props data"""
+    return index()
 
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "last_updated": latest_props_data.get("last_updated")})
+    return jsonify({
+        "status": "healthy", 
+        "last_updated": latest_props_data.get("last_updated"),
+        "props_count": len(latest_props_data.get("props", []))
+    })
 
 def init_scheduler():
     """Initialize the background scheduler"""
