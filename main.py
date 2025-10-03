@@ -226,40 +226,46 @@ def fetch_nfl_props():
             
             return True, vals
         
-        # 7. Filter qualifying props
-        qualifying = []
+        # 7. Filter qualifying props and group by player/line
+        qualifying_grouped = {}
         for p in props:
             stat_col = market_to_stat.get(p["market"])
             if not stat_col:
                 continue
             ok, vals = qualifies_strong(p["player"], stat_col, p["line"], p["side"], p["market"])
             if ok:
-                avg_val = sum(vals) / len(vals) if vals else 0
-                qualifying.append({
-                    "game": p["game"],
-                    "game_time": p["game_time"],
-                    "market": p["market"].replace('_', ' ').title(),
-                    "player": p["player"],
-                    "side": p["side"],
-                    "line": float(p["line"]),
-                    "odds": int(p["odds"]),
+                # Create unique key for this prop
+                prop_key = f"{p['player']}_{p['market']}_{p['side']}_{p['line']}_{p['game']}"
+                
+                if prop_key not in qualifying_grouped:
+                    avg_val = sum(vals) / len(vals) if vals else 0
+                    qualifying_grouped[prop_key] = {
+                        "game": p["game"],
+                        "game_time": p["game_time"],
+                        "market": p["market"].replace('_', ' ').title(),
+                        "player": p["player"],
+                        "side": p["side"],
+                        "line": float(p["line"]),
+                        "season_avg": round(float(avg_val), 1),
+                        "weekly_values": [float(v) for v in vals],
+                        "bookmakers": []
+                    }
+                
+                # Add this bookmaker's odds
+                qualifying_grouped[prop_key]["bookmakers"].append({
                     "bookmaker": p["bookmaker"],
                     "bookmaker_title": p["bookmaker_title"],
-                    "season_avg": round(float(avg_val), 1),
-                    "weekly_values": [float(v) for v in vals]
+                    "odds": int(p["odds"])
                 })
         
-        # 8. Deduplicate
-        df = pd.DataFrame(qualifying)
-        if not df.empty:
-            df = df.drop_duplicates(subset=["player","market","line","side"])
-            qualifying = df.to_dict('records')
-            # Convert numpy types to Python types
-            for prop in qualifying:
-                prop['line'] = float(prop['line'])
-                prop['odds'] = int(prop['odds'])
-                prop['season_avg'] = float(prop['season_avg'])
-                prop['weekly_values'] = [float(v) for v in prop['weekly_values']]
+        # Convert to list and sort bookmakers by best odds
+        qualifying = []
+        for prop in qualifying_grouped.values():
+            # Sort bookmakers by best odds (least negative)
+            prop["bookmakers"].sort(key=lambda x: x["odds"], reverse=True)
+            qualifying.append(prop)
+        
+        # 8. No need for deduplication anymore since we grouped
             # Convert any remaining numpy types to Python types
             for prop in qualifying:
                 prop['line'] = float(prop['line']) if prop['line'] is not None else None
