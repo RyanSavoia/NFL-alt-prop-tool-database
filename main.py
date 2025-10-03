@@ -250,6 +250,12 @@ def fetch_nfl_props():
         if not df.empty:
             df = df.drop_duplicates(subset=["player","market","line","side"])
             qualifying = df.to_dict('records')
+            # Convert any remaining numpy types to Python types
+            for prop in qualifying:
+                prop['line'] = float(prop['line']) if prop['line'] is not None else None
+                prop['odds'] = int(prop['odds']) if prop['odds'] is not None else None
+                prop['season_avg'] = float(prop['season_avg']) if prop['season_avg'] is not None else None
+                prop['weekly_values'] = [float(v) for v in prop['weekly_values']] if prop['weekly_values'] else []
         
         # Update global data
         with data_lock:
