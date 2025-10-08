@@ -38,6 +38,7 @@ ET = timezone(timedelta(hours=-5))  # Eastern Time
 def get_upcoming_games_filter():
     """
     Determines which games to show based on current day of week.
+    Shows Thursday-Monday games, resets after Monday.
     """
     now_et = datetime.now(ET)
     weekday = now_et.weekday()  # 0=Monday, 6=Sunday
@@ -46,27 +47,25 @@ def get_upcoming_games_filter():
         dt = datetime.fromisoformat(game_time_str.replace("Z", "+00:00"))
         dt_et = dt.astimezone(ET)
         game_date = dt_et.date()
+        game_weekday = dt_et.weekday()  # 0=Monday, 3=Thursday, 6=Sunday
         today = now_et.date()
         
         # Calculate days until game
         days_until = (game_date - today).days
         
-        # Monday (0)
+        # Monday (0) - show only Monday night game if it hasn't started yet
         if weekday == 0:
-            return days_until == 0
-        # Tuesday or Wednesday (1, 2)
+            return game_weekday == 0 and days_until == 0
+        
+        # Tuesday (1) or Wednesday (2) - show Thursday-Monday of upcoming week
         elif weekday in [1, 2]:
-            game_weekday = dt_et.weekday()
-            return game_weekday == 3 and 0 < days_until <= 7
-        # Thursday (3)
-        elif weekday == 3:
-            return days_until == 0
-        # Friday or Saturday (4, 5)
-        elif weekday in [4, 5]:
-            return 0 <= days_until <= 3
-        # Sunday (6)
-        else:
-            return 0 <= days_until <= 1
+            # Show games from upcoming Thursday (3) through next Monday (0)
+            return game_weekday in [3, 4, 5, 6, 0] and 0 < days_until <= 7
+        
+        # Thursday (3) through Sunday (6) - show remaining games in current week
+        else:  # weekday in [3, 4, 5, 6]
+            # Show games from today through next Monday
+            return 0 <= days_until <= (7 - weekday + 1)
     
     return should_include_game
 
@@ -203,31 +202,28 @@ def fetch_nfl_props():
             "player_reception_yds_alternate": "receiving_yards"
         }
         
-        # 6. Qualification check
-        def qualifies_strong(player_full_name, stat_col, line, side, market):
+        # 6. Qualification check - hit the line every game (no cushion)
+        def qualifies_strong(player_full_name, stat_col, line, side):
             last_name = player_full_name.split()[-1]
             player_games = weekly_stats[
                 (weekly_stats["season"] == 2025) &
                 (weekly_stats["player"].str.contains(last_name, case=False, na=False))
             ]
-            if player_games.empty or len(player_games) < current_week - 1:
+            
+            # Must have played at least 4 games
+            if player_games.empty or len(player_games) < 4:
                 return False, []
             
             vals = list(player_games[stat_col].values)
             
+            # Check if player hit the line in every game
             for val in vals:
                 if side == "Over":
-                    if "yds" in market:
-                        if not (val > line * 1.2):
-                            return False, vals
-                    elif "attempts" in market or "receptions" in market:
-                        if not (val > line * 1.3):
-                            return False, vals
-                    else:
-                        if not (val > line):
-                            return False, vals
-                else:
-                    return False, vals
+                    if not (val > line):
+                        return False, vals
+                else:  # Under
+                    if not (val < line):
+                        return False, vals
             
             return True, vals
         
@@ -237,7 +233,7 @@ def fetch_nfl_props():
             stat_col = market_to_stat.get(p["market"])
             if not stat_col:
                 continue
-            ok, vals = qualifies_strong(p["player"], stat_col, p["line"], p["side"], p["market"])
+            ok, vals = qualifies_strong(p["player"], stat_col, p["line"], p["side"])
             if ok:
                 # Create unique key for this prop
                 prop_key = (p["player"], p["market"], p["line"], p["side"], p["game"])
@@ -293,7 +289,7 @@ def fetch_nfl_props():
                     "total_games": len(events_to_check),
                     "total_props": len(qualifying),
                     "odds_range": "-600 to -150",
-                    "cushion": "20% for yards, 30% for attempts/receptions"
+                    "min_games": "4 games played"
                 },
                 "error": None
             }
