@@ -75,6 +75,56 @@ def format_game_time(game_time_str):
     dt_et = dt.astimezone(ET)
     return dt_et.strftime("%a %m/%d %I:%M%p ET")
 
+def match_player_name(api_name, pbp_players):
+    """
+    Match API player name (e.g., "Garrett Wilson") to play-by-play name (e.g., "G.Wilson")
+    Returns the matching PBP player name or None
+    """
+    if not api_name:
+        return None
+    
+    # Split the API name
+    parts = api_name.strip().split()
+    if len(parts) < 2:
+        return None
+    
+    first_name = parts[0]
+    last_name = parts[-1]
+    first_initial = first_name[0].upper()
+    
+    # Try multiple matching strategies
+    # 1. First initial + Last name (e.g., "G.Wilson")
+    pattern1 = f"{first_initial}.{last_name}"
+    for pbp_name in pbp_players:
+        if pbp_name == pattern1:
+            return pbp_name
+    
+    # 2. First initial + space + Last name (e.g., "G Wilson")  
+    pattern2 = f"{first_initial} {last_name}"
+    for pbp_name in pbp_players:
+        if pbp_name == pattern2:
+            return pbp_name
+    
+    # 3. Full first name + Last name (e.g., "Garrett Wilson")
+    pattern3 = f"{first_name} {last_name}"
+    for pbp_name in pbp_players:
+        if pbp_name == pattern3:
+            return pbp_name
+    
+    # 4. Case-insensitive full name match
+    for pbp_name in pbp_players:
+        if pbp_name.lower() == api_name.lower():
+            return pbp_name
+    
+    # 5. Try first two letters + last name for names like "DeAndre" -> "De.Hopkins"
+    if len(first_name) >= 2:
+        pattern4 = f"{first_name[:2]}.{last_name}"
+        for pbp_name in pbp_players:
+            if pbp_name == pattern4:
+                return pbp_name
+    
+    return None
+
 def fetch_nfl_props():
     """Main function to fetch and process NFL props"""
     global latest_props_data
@@ -192,6 +242,9 @@ def fetch_nfl_props():
         )
         current_week = weekly_stats["week"].max()
         
+        # Get all unique player names from play-by-play for matching
+        all_pbp_players = weekly_stats[weekly_stats["season"] == 2025]["player"].unique().tolist()
+        
         # 5. Market → stat mapping
         market_to_stat = {
             "player_pass_yds_alternate": "passing_yards",
@@ -203,11 +256,17 @@ def fetch_nfl_props():
         }
         
         # 6. Qualification check - hit the line every game (no cushion)
-        def qualifies_strong(player_full_name, stat_col, line, side):
-            last_name = player_full_name.split()[-1]
+        def qualifies_strong(player_api_name, stat_col, line, side):
+            # Match the API name to the play-by-play name
+            pbp_player_name = match_player_name(player_api_name, all_pbp_players)
+            
+            if not pbp_player_name:
+                return False, []
+            
+            # Get this specific player's games
             player_games = weekly_stats[
                 (weekly_stats["season"] == 2025) &
-                (weekly_stats["player"].str.contains(last_name, case=False, na=False))
+                (weekly_stats["player"] == pbp_player_name)
             ]
             
             # Must have played at least 4 games
