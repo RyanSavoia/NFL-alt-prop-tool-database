@@ -255,7 +255,7 @@ def fetch_nfl_props():
             "player_reception_yds_alternate": "receiving_yards"
         }
         
-        # 6. Qualification check - hit the line in all of last 4 games
+        # 6. Qualification check - hit the line every game (no cushion)
         def qualifies_strong(player_api_name, stat_col, line, side):
             # Match the API name to the play-by-play name
             pbp_player_name = match_player_name(player_api_name, all_pbp_players)
@@ -273,11 +273,9 @@ def fetch_nfl_props():
             if player_games.empty or len(player_games) < 4:
                 return False, []
             
-            # Get last 4 games (most recent weeks)
-            last_4_games = player_games.sort_values('week', ascending=False).head(4)
-            vals = list(last_4_games[stat_col].values)
+            vals = list(player_games[stat_col].values)
             
-            # Check if player hit the line in all 4 games
+            # Check if player hit the line in every game
             for val in vals:
                 if side == "Over":
                     if not (val > line):
@@ -350,7 +348,7 @@ def fetch_nfl_props():
                     "total_games": len(events_to_check),
                     "total_props": len(qualifying),
                     "odds_range": "-600 to -150",
-                    "min_games": "Last 4 games (100% hit rate)"
+                    "min_games": "4 games played"
                 },
                 "error": None
             }
