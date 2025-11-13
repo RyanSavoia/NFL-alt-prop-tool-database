@@ -192,14 +192,9 @@ def fetch_nfl_props():
                         line = outcome.get("point")
                         odds = outcome.get("price")
                         
-                        # Different odds ranges for DFS vs traditional sportsbooks
-                        dfs_books = ['prizepicks', 'underdog', 'pick6']
-                        is_dfs = bookmaker.get("key") in dfs_books
-                        
-                        # DFS: include -405 to +106 range
-                        # Traditional: keep -600 to -150 range
-                        if odds is not None:
-                            if (is_dfs and -405 <= odds <= 106) or (not is_dfs and -600 <= odds <= -150):
+                        # Apply the same -600 to -150 filter for ALL bookmakers now
+                        # Since PrizePicks uses Underdog odds, they get filtered the same way
+                        if odds is not None and -600 <= odds <= -150:
                                 props.append({
                                 "game": f"{away} @ {home}",
                                 "game_time": game_time,
