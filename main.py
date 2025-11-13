@@ -178,7 +178,7 @@ def fetch_nfl_props():
             
             odds_url = (
                 f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{event_id}/odds"
-                f"?regions=us&oddsFormat=american&markets={markets}&apiKey={API_KEY}"
+                f"?regions=us,us2,us_dfs&oddsFormat=american&markets={markets}&apiKey={API_KEY}"
             )
             odds_resp = requests.get(odds_url, timeout=10)
             odds_resp.raise_for_status()
