@@ -1,4 +1,16 @@
-import requests
+# 3. Collect props
+        props = []
+        for ev in events_to_check:
+            event_id = ev["id"]
+            home, away = ev["home_team"], ev["away_team"]
+            game_time = format_game_time(ev["commence_time"])
+            
+            odds_url = (
+                f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{event_id}/odds"
+                f"?regions=us,us2,us_dfs&oddsFormat=american&markets={markets}&apiKey={API_KEY}"
+            )
+            odds_resp = requests.get(odds_url, timeout=10)
+            odds_resp.raise_for_status()import requests
 import pandas as pd
 import nfl_data_py as nfl
 from datetime import datetime, timezone, timedelta
