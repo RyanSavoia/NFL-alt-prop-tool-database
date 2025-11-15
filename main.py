@@ -255,7 +255,7 @@ def fetch_nfl_props():
             "player_reception_yds_alternate": "receiving_yards"
         }
         
-        # 6. Qualification check - hit the line in all of last 4 games
+        # 6. Qualification check - hit the line in at least 4 consecutive games, return all consecutive
         def qualifies_strong(player_api_name, stat_col, line, side):
             # Match the API name to the play-by-play name
             pbp_player_name = match_player_name(player_api_name, all_pbp_players)
@@ -273,20 +273,31 @@ def fetch_nfl_props():
             if player_games.empty or len(player_games) < 4:
                 return False, []
             
-            # Get last 4 games (most recent weeks)
-            last_4_games = player_games.sort_values('week', ascending=False).head(4)
-            vals = list(last_4_games[stat_col].values)
+            # Sort by week descending (most recent first)
+            player_games = player_games.sort_values('week', ascending=False)
             
-            # Check if player hit the line in all 4 games
-            for val in vals:
+            # Find the longest streak from most recent games
+            consecutive_games = []
+            for _, game in player_games.iterrows():
+                val = game[stat_col]
+                
+                # Check if this game hits the line
                 if side == "Over":
-                    if not (val > line):
-                        return False, vals
+                    hits = val > line
                 else:  # Under
-                    if not (val < line):
-                        return False, vals
+                    hits = val < line
+                
+                if hits:
+                    consecutive_games.append(val)
+                else:
+                    # Streak broken, stop here
+                    break
             
-            return True, vals
+            # Check if we have at least 4 consecutive games
+            if len(consecutive_games) >= 4:
+                return True, consecutive_games
+            else:
+                return False, []
         
         # 7. Group qualifying props by unique prop, collecting all bookmakers
         prop_groups = {}
@@ -310,7 +321,8 @@ def fetch_nfl_props():
                         "line": float(p["line"]),
                         "bookmakers": [],
                         "season_avg": round(float(avg_val), 1),
-                        "weekly_values": [float(v) for v in vals]
+                        "weekly_values": [float(v) for v in vals],
+                        "streak_length": len(vals)  # Add streak length for display
                     }
                 
                 # Add bookmaker to this prop
@@ -350,7 +362,7 @@ def fetch_nfl_props():
                     "total_games": len(events_to_check),
                     "total_props": len(qualifying),
                     "odds_range": "-600 to -150",
-                    "min_games": "Last 4 games (100% hit rate)"
+                    "min_games": "At least 4 consecutive games hit"
                 },
                 "error": None
             }
